@@ -8,9 +8,9 @@
 
 __global__ void MatrixMultiplicationGPU(const float* A, const float* B, float* C, size_t n)
 {
-	size_t C_index = (blockIdx.x + 1) * (threadIdx.y * blockDim.x + threadIdx.x);
-	size_t A0_index = threadIdx.y * blockDim.x * (blockIdx.x + 1);
-	size_t B0_index = threadIdx.x * blockDim.y * (blockIdx.x + 1);
+	size_t C_index = blockIdx.x * blockDim.x + threadIdx.x;
+	size_t A0_index = C_index/n;
+	size_t B0_index = C_index - (A0_index*n);
 	float sum = 0;
 	for (auto temp = 0; temp < n; ++temp)
 		sum += A[A0_index + temp] * B[B0_index + temp*n];
@@ -60,22 +60,50 @@ int main()
 	float* dev_B = nullptr;
 	float* dev_C = nullptr;
 
-	cudaMalloc((void**)&dev_A, matrixSize);
-	cudaMalloc((void**)&dev_B, matrixSize);
-	cudaMalloc((void**)&dev_C, matrixSize);
+	cudaError_t cudaStatus;
+
+	cudaStatus = cudaMalloc((void**)&dev_A, matrixSize);
+	if (cudaStatus != cudaSuccess) 
+	{
+		fprintf(stderr, "cudaMalloc failed!");
+	}
+	cudaStatus = cudaMalloc((void**)&dev_B, matrixSize);
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "cudaMalloc failed!");
+	}
+	cudaStatus = cudaMalloc((void**)&dev_C, matrixSize);
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "cudaMalloc failed!");
+	}
 	
-	dim3 blocksPerGrid = dim3((n / 1024 + 1));
-	dim3 threadsPerBlock = dim3(((n / 1024) ? 1024 : n), ((n / 1024) ? 1024 : n));
+	dim3 blocksPerGrid = dim3(((n*n) / 1024 + 1));
+	dim3 threadsPerBlock = dim3(((n / 1024) ? 1024 : n));
 
 	cudaEvent_t start, stop;
 	cudaEventCreate(&start);
 	cudaEventCreate(&stop);
 	cudaEventRecord(start, 0);
+	
+	cudaStatus = cudaMemcpy(dev_A, host_A, matrixSize, cudaMemcpyHostToDevice);
+	if (cudaStatus != cudaSuccess) 
+	{
+		fprintf(stderr, "cudaMemcpy failed!");
+	}
+	cudaStatus = cudaMemcpy(dev_B, host_B, matrixSize, cudaMemcpyHostToDevice);
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "cudaMemcpy failed!");
+	}
 
-	cudaMemcpy(dev_A, host_A, matrixSize, cudaMemcpyHostToDevice);
-	cudaMemcpy(dev_B, host_B, matrixSize, cudaMemcpyHostToDevice);
 	MatrixMultiplicationGPU<<<blocksPerGrid,threadsPerBlock>>>(dev_A, dev_B, dev_C, n);
-	cudaMemcpy(host_C, dev_C, matrixSize, cudaMemcpyDeviceToHost);
+
+	cudaStatus = cudaMemcpy(host_C, dev_C, matrixSize, cudaMemcpyDeviceToHost);
+	if (cudaStatus != cudaSuccess)
+	{
+		fprintf(stderr, "cudaMemcpy failed! %d", cudaStatus);
+	}
 
 	cudaEventRecord(stop, 0);
 	cudaEventSynchronize(stop);
@@ -84,16 +112,16 @@ int main()
 	printf("Time spent on GPU calculation: %.3f milliseconds\n",ElapsedTime);
 	
 
-	time_t begin, end;
-	time(&begin);
+	clock_t begin, end;
+	begin = clock();
 	//std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
 	auto vector = MatrixMultiplicationCPU(host_A, host_B, n);
 
-	time(&end);
+	end = clock();
 	//std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-	auto cputime = end - begin;
-	printf("Time spent on CPU calculation: %2d seconds\n", cputime);
+	float cputime = ((float)end - (float)begin)/ CLOCKS_PER_SEC;
+	printf("Time spent on CPU calculation: %.3f seconds\n", cputime);
 
 	free(host_A);
 	free(host_B);
@@ -104,7 +132,8 @@ int main()
 
 	return 0;
 }
-/*Device name : NVIDIA GeForce GTX 1050
+/*
+Device name : NVIDIA GeForce GTX 1050
 Total global memory : 4095 MB
 Shared memory per block : 49152
 Registers per block : 65536
@@ -119,4 +148,5 @@ Compute capability: 6.1
 Texture alignment: 512
 Device overlap: 1
 Multiprocessor count: 5
-Kernel execution timeout enabled: true*/
+Kernel execution timeout enabled: true
+*/
