@@ -3,7 +3,7 @@
 #include "device_launch_parameters.h"
 #include <stdio.h>
 #include <random>
-#include "time.h"
+#include <time.h>
 #include <vector>
 
 __global__ void MatrixMultiplicationGPU(const float* A, const float* B, float* C, size_t n)
@@ -11,6 +11,7 @@ __global__ void MatrixMultiplicationGPU(const float* A, const float* B, float* C
 	size_t C_index = blockIdx.x * blockDim.x + threadIdx.x;
 	size_t A0_index = C_index/n;
 	size_t B0_index = C_index - (A0_index*n);
+	A0_index = A0_index * n;
 	float sum = 0;
 	for (auto temp = 0; temp < n; ++temp)
 		sum += A[A0_index + temp] * B[B0_index + temp*n];
@@ -41,7 +42,7 @@ int main()
 	std::mt19937 gen(rd());
 
 	size_t n = static_cast<size_t>(gen() % 1900) + 100;
-	printf("Matrix dimentions are %dx%d\n", n, n);
+	printf("Matrix dimensions are %dx%d\n", n, n);
 	size_t matrixSize = n * n * sizeof(float);
 	float *host_A = (float*)malloc(matrixSize);
 	float *host_B = (float*)malloc(matrixSize);
@@ -122,6 +123,24 @@ int main()
 	//std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
 	float cputime = ((float)end - (float)begin)/ CLOCKS_PER_SEC;
 	printf("Time spent on CPU calculation: %.3f seconds\n", cputime);
+		
+	/*float coarse_threshold = 0.001;
+	printf("Enter deviation threshold: ");
+	scanf("%f", &coarse_threshold);*/
+	printf("Precision test started...\n");
+	int coarsecount = 0;
+	for (auto i = 0; i < n; ++i)
+	{
+		for (auto j = 0; j < n; ++j)
+		{
+			if ((host_C[i * n + j] - vector[i][j]) > 0.0000000000000001)
+			{
+				//printf("Presicion test failed values %f and %f of index [%d,%d] are too coarse!\n", host_C[i * n + j], vector[i][j], i, j);
+				coarsecount++;
+			}
+		}
+	}
+	printf("Precision test finished. Ammount of coarse numbers: %d\n", coarsecount);
 
 	free(host_A);
 	free(host_B);
