@@ -133,7 +133,7 @@ int main()
 	{
 		for (auto j = 0; j < n; ++j)
 		{
-			if ((host_C[i * n + j] - vector[i][j]) > 0.0000000000000001)
+			if ((host_C[i * n + j] - vector[i][j]) != 0)
 			{
 				//printf("Presicion test failed values %f and %f of index [%d,%d] are too coarse!\n", host_C[i * n + j], vector[i][j], i, j);
 				coarsecount++;
