@@ -1,7 +1,7 @@
 # CudaLabs
 
 ### Matrix Multiplication plotted results comparison
-![Chart #1](![image](https://user-images.githubusercontent.com/114860217/196472741-5ceaf257-565c-45d4-8af2-c93c1edef619.png))
+![Chart #1](https://github.com/EgorErmk/CudaLabs/blob/master/MatMul.png?raw=true)
 ### Vector Summation plotted results comparison
 ![Chart #2](![image](https://user-images.githubusercontent.com/114860217/196473167-5603cb6b-4d06-408c-8caa-fc863b8a5486.png))
 На приведенных графиках по оси абсцисс откладывается размер объектов с которыми производились вычисления, для матриц это одна из сторон, а для вектора его полный размер.
