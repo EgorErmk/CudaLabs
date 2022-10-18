@@ -6,20 +6,21 @@
 #include <time.h>
 #include <vector>
 
+
 __global__ void MatrixMultiplicationGPU(const float* A, const float* B, float* C, size_t n)
 {
-	size_t C_index = blockIdx.x * blockDim.x + threadIdx.x;
-	size_t A0_index = C_index/n;
-	size_t B0_index = C_index - (A0_index*n);
-	A0_index = A0_index * n;
+	size_t C_index = blockIdx.x * blockDim.x + threadIdx.x; // index calculation
+	size_t A0_index = C_index/n; // row calculation
+	size_t B0_index = C_index - (A0_index*n); // index of the first element in multiplied coloumn calculation
+	A0_index = A0_index * n; // index of the first element in multiplied row calculation
 	float sum = 0;
-	for (auto temp = 0; temp < n; ++temp)
-		sum += A[A0_index + temp] * B[B0_index + temp*n];
+	for (auto temp = 0; temp < n; ++temp) // matrix product element calculation
+		sum += A[A0_index + temp] * B[B0_index + temp*n]; 
 	C[C_index] = sum;
 }
 
 std::vector<std::vector<float>> MatrixMultiplicationCPU(const float* A,const float* B, size_t n)
-{
+{ // simple matrix mul, calculates each element consecutively 
 	std::vector<std::vector<float>> C(n,std::vector<float>(n,0));
 	float sum = 0;
 	for (auto i = 0; i < n; ++i)
@@ -38,17 +39,17 @@ std::vector<std::vector<float>> MatrixMultiplicationCPU(const float* A,const flo
 }
 int main()
 {
-	std::random_device rd;
-	std::mt19937 gen(rd());
+	std::random_device rd; // seed generator
+	std::mt19937 gen(rd()); // quick pseudo rng
 
-	size_t n = static_cast<size_t>(gen() % 1900) + 100;
+	size_t n = static_cast<size_t>(gen() % 1900) + 100; // n - one dimension of the square matrix
 	printf("Matrix dimensions are %dx%d\n", n, n);
 	size_t matrixSize = n * n * sizeof(float);
-	float *host_A = (float*)malloc(matrixSize);
+	float *host_A = (float*)malloc(matrixSize); // mem alloc for dynamic structure
 	float *host_B = (float*)malloc(matrixSize);
 	float *host_C = (float*)malloc(matrixSize);
 
-	for (auto i = 0; i < n; ++i)
+	for (auto i = 0; i < n; ++i) // initial matrixes value gen
 	{
 		for (auto j = 0; j < n; ++j)
 		{
@@ -57,13 +58,13 @@ int main()
 		}
 	}
 
-	float* dev_A = nullptr;
+	float* dev_A = nullptr; // device(gpu) vars
 	float* dev_B = nullptr;
 	float* dev_C = nullptr;
 
 	cudaError_t cudaStatus;
 
-	cudaStatus = cudaMalloc((void**)&dev_A, matrixSize);
+	cudaStatus = cudaMalloc((void**)&dev_A, matrixSize); //mem alloc for gpu
 	if (cudaStatus != cudaSuccess) 
 	{
 		fprintf(stderr, "cudaMalloc failed!");
@@ -79,15 +80,15 @@ int main()
 		fprintf(stderr, "cudaMalloc failed!");
 	}
 	
-	dim3 blocksPerGrid = dim3(((n*n) / 1024 + 1));
-	dim3 threadsPerBlock = dim3(((n / 1024) ? 1024 : n));
+	dim3 blocksPerGrid = dim3(((n*n) / 1024 + 1)); // grid size calc
+	dim3 threadsPerBlock = dim3(((n / 1024) ? 1024 : n)); // thread calc (usually just max witch is 1024)
 
-	cudaEvent_t start, stop;
+	cudaEvent_t start, stop; // for elapsed time calc (gpu)
 	cudaEventCreate(&start);
 	cudaEventCreate(&stop);
 	cudaEventRecord(start, 0);
 	
-	cudaStatus = cudaMemcpy(dev_A, host_A, matrixSize, cudaMemcpyHostToDevice);
+	cudaStatus = cudaMemcpy(dev_A, host_A, matrixSize, cudaMemcpyHostToDevice); // copy data to gpu
 	if (cudaStatus != cudaSuccess) 
 	{
 		fprintf(stderr, "cudaMemcpy failed!");
@@ -98,36 +99,33 @@ int main()
 		fprintf(stderr, "cudaMemcpy failed!");
 	}
 
-	MatrixMultiplicationGPU<<<blocksPerGrid,threadsPerBlock>>>(dev_A, dev_B, dev_C, n);
+	MatrixMultiplicationGPU<<<blocksPerGrid,threadsPerBlock>>>(dev_A, dev_B, dev_C, n); // perform calc
 
-	cudaStatus = cudaMemcpy(host_C, dev_C, matrixSize, cudaMemcpyDeviceToHost);
+	cudaStatus = cudaMemcpy(host_C, dev_C, matrixSize, cudaMemcpyDeviceToHost); // copy results from gpu
 	if (cudaStatus != cudaSuccess)
 	{
 		fprintf(stderr, "cudaMemcpy failed! %d", cudaStatus);
 	}
 
-	cudaEventRecord(stop, 0);
+	cudaEventRecord(stop, 0); // stop the timer
 	cudaEventSynchronize(stop);
 	float ElapsedTime;
 	cudaEventElapsedTime(&ElapsedTime, start, stop);
 	printf("Time spent on GPU calculation: %.3f milliseconds\n",ElapsedTime);
 	
 
-	clock_t begin, end;
+	clock_t begin, end; // for elapsed time calc (cpu)
 	begin = clock();
-	//std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-
+	
 	auto vector = MatrixMultiplicationCPU(host_A, host_B, n);
 
 	end = clock();
-	//std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+	
 	float cputime = ((float)end - (float)begin)/ CLOCKS_PER_SEC;
 	printf("Time spent on CPU calculation: %.3f seconds\n", cputime);
 		
-	/*float coarse_threshold = 0.001;
-	printf("Enter deviation threshold: ");
-	scanf("%f", &coarse_threshold);*/
 	printf("Precision test started...\n");
+	//checking if some of the gpu results differ from those computed by cpu and how many there are
 	int coarsecount = 0;
 	for (auto i = 0; i < n; ++i)
 	{
@@ -142,7 +140,7 @@ int main()
 	}
 	printf("Precision test finished. Ammount of coarse numbers: %d\n", coarsecount);
 
-	free(host_A);
+	free(host_A); // free the memory
 	free(host_B);
 	free(host_C);
 	cudaFree(dev_A);
@@ -151,7 +149,7 @@ int main()
 
 	return 0;
 }
-/*
+/* used graphic card stats
 Device name : NVIDIA GeForce GTX 1050
 Total global memory : 4095 MB
 Shared memory per block : 49152
