@@ -18,11 +18,12 @@
 #include <stdio.h>
 #include <random>
 #include <cmath>
-#include <vector>
+#include <iostream>
+#include <thrust/sequence.h>
 
 const unsigned int datapoints = 1000;
 const unsigned int population_size = 1000;
-__constant__ float a = -4, b = 2; // "a" is the left point "b" is the right
+__constant__ float a = -4, b = 2, mean = 0, stddev = 1; // "a" is the left point "b" is the right
 const float C0 = 2, C1 = 1, C2 = 1, C3 = -1, C4 = -0.5;
 
 typedef thrust::tuple<float, float, float, float, float> coefficients;
@@ -55,8 +56,8 @@ struct crossover
 		coefficients parent1 = thrust::get<0>(temp);
 		coefficients parent2 = thrust::get<1>(temp);
 		coefficients child = parent2;
-		unsigned char n = static_cast<unsigned int>(curand_uniform(&state) * 10000) % 64 + 1;
-		unsigned int mask = 0xffff, cast,value = 0;
+		unsigned char n = static_cast<unsigned int>(curand_uniform(&state) * 10000) % 32 + 1;
+		unsigned int mask = 0xffffffff, cast = 0,value = 0;
 		mask >>= n;
 		memcpy(&cast, &thrust::get<0>(parent2), 4);
 		value = cast & mask;
@@ -91,13 +92,79 @@ struct crossover
 		return child;
 	}
 };
-
+struct mutation
+{
+	__device__
+	coefficients operator()(coefficients& temp, unsigned int seed)
+	{
+		curandState state;
+		coefficients mutating_temp = temp;
+		curand_init(seed, 0, 0, &state);
+		uint32_t mask = 0, mask_ref = 0, cast = 0, value = 0;
+		
+		unsigned char k, n = static_cast<unsigned int>(curand_log_normal(&state, mean, stddev));
+		for (size_t i = 0; i < n; i++)
+		{
+			k = static_cast<unsigned int>(curand_uniform(&state) * 10000) % 33;
+			mask_ref = 0x80000000;
+			mask_ref >>= k;
+			mask |= mask_ref;
+		}
+		uint32_t* cast_ptr = reinterpret_cast<uint32_t*>(&thrust::get<0>(mutating_temp));
+		cast = cast_ptr[0];
+		value = ~cast & mask;
+		cast &= ~mask;
+		cast |= value;
+		cast_ptr[0] = cast;
+		cast_ptr = reinterpret_cast<uint32_t*>(&thrust::get<1>(mutating_temp));
+		cast = cast_ptr[0];
+		value = ~cast & mask;
+		cast &= ~mask;
+		cast |= value;
+		cast_ptr[0] = cast;
+		cast_ptr = reinterpret_cast<uint32_t*>(&thrust::get<2>(mutating_temp));
+		cast = cast_ptr[0];
+		value = ~cast & mask;
+		cast &= ~mask;
+		cast |= value;
+		cast_ptr[0] = cast;
+		cast_ptr = reinterpret_cast<uint32_t*>(&thrust::get<3>(mutating_temp));
+		cast = cast_ptr[0];
+		value = ~cast & mask;
+		cast &= ~mask;
+		cast |= value;
+		cast_ptr[0] = cast;
+		cast_ptr = reinterpret_cast<uint32_t*>(&thrust::get<4>(mutating_temp));
+		cast = cast_ptr[0];
+		value = ~cast & mask;
+		cast &= ~mask;
+		cast |= value;
+		cast_ptr[0] = cast;
+		return mutating_temp;
+	}
+};
+//struct generate //for tests
+//{
+//	__device__
+//	float operator()(float& seed)
+//	{
+//		float temp = seed;
+//		uint32_t* cast_ptr = reinterpret_cast<uint32_t*>(&temp);
+//		unsigned int mask = 0xc20, cast = 0, value = 0;
+//		cast = cast_ptr[0];
+//		value = ~cast & mask;
+//		cast &= ~mask;
+//		cast |= value;
+//		cast_ptr[0] = cast;
+//		return temp;
+//	}
+//};
 int main()
 {
 	thrust::host_vector<float> H_initial_dataset(datapoints, 0);
 	thrust::device_vector<float> D_initial_dataset(datapoints);
 	thrust::device_vector<float> step(datapoints);
-	thrust::host_vector<coefficients> H_population(population_size/2, (0, 0, 0, 0, 0));
+	thrust::host_vector<coefficients> H_population(population_size, (0, 0, 0, 0, 0));
 	float h = 0;
 	h = (b-a) / static_cast<float>(datapoints);
 	std::random_device rd;
@@ -129,16 +196,39 @@ int main()
 	thrust::default_random_engine g;
 	thrust::shuffle_copy(thrust::device, parents.begin(), parents.end(), shuffled_parents.begin(),g);
 	thrust::transform(thrust::make_zip_iterator(thrust::make_tuple(parents.begin(), shuffled_parents.begin())), thrust::make_zip_iterator(thrust::make_tuple(parents.end(), shuffled_parents.end())), thrust::counting_iterator<int>(0), children.begin(), crossover());
-	
-	//H_population = children;
-	//std::vector<float> test(5*500,1);
-	/*for (size_t i = 0; i < population_size; i++)
-	{
-		test.push_back(thrust::get<0>(H_population[i]));
-		test.push_back(thrust::get<1>(H_population[i]));
-		test.push_back(thrust::get<2>(H_population[i]));
-		test.push_back(thrust::get<3>(H_population[i]));
-		test.push_back(thrust::get<4>(H_population[i]));
-	}*/
+	//mutation
+	thrust::device_vector<coefficients> new_population(population_size);
+	thrust::copy_n(thrust::device, parents.begin(), population_size / 2, new_population.begin());
+	thrust::copy_n(thrust::device, children.begin(), population_size / 2, new_population.begin() + population_size / 2);
 
+	thrust::transform(new_population.begin()+1, new_population.end(), thrust::counting_iterator<int>(0), new_population.begin()+1, mutation());
+	thrust::copy_n(thrust::device, parents.begin(), 1, new_population.begin());
+	//test
+	//thrust::device_vector<float> test(population_size, 1.0);
+	////thrust::sequence(thrust::device, test.begin(), test.end());
+	//thrust::host_vector<float> host_test(population_size);
+	//thrust::transform(test.begin(),test.end(), test.begin(), generate());
+	//host_test = test;
+	//for (size_t i = 0; i < 10; i++)
+	//{
+	//	std::cout << host_test[i] << '\n';
+	//}
+	
+	H_population = new_population;
+	std::cout << thrust::get<0>(H_population[0]) << '\n';
+	std::cout << thrust::get<1>(H_population[0]) << '\n';
+	std::cout << thrust::get<2>(H_population[0]) << '\n';
+	std::cout << thrust::get<3>(H_population[0]) << '\n';
+	std::cout << thrust::get<4>(H_population[0]) << '\n';
+	std::cout << thrust::get<0>(H_population[1]) << '\n';
+	std::cout << thrust::get<1>(H_population[1]) << '\n';
+	std::cout << thrust::get<2>(H_population[1]) << '\n';
+	std::cout << thrust::get<3>(H_population[1]) << '\n';
+	std::cout << thrust::get<4>(H_population[1]) << '\n';
+	std::cout << thrust::get<0>(H_population[502]) << '\n';
+	std::cout << thrust::get<1>(H_population[502]) << '\n';
+	std::cout << thrust::get<2>(H_population[502]) << '\n';
+	std::cout << thrust::get<3>(H_population[502]) << '\n';
+	std::cout << thrust::get<4>(H_population[502]) << '\n';
+	
 }
