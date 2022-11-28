@@ -21,10 +21,9 @@
 #include <iostream>
 #include <thrust/sequence.h>
 
-const unsigned int datapoints = 1000;
-const unsigned int population_size = 1000;
+const unsigned int datapoints = 1000, population_size = 1000;
 __constant__ float a = -4, b = 2, mean = 0, stddev = 1; // "a" is the left point "b" is the right
-const float C0 = 2, C1 = 1, C2 = 1, C3 = -1, C4 = -0.5;
+const float C0 = 2, C1 = 1, C2 = 1, C3 = -1, C4 = -0.5; // coefs 
 
 typedef thrust::tuple<float, float, float, float, float> coefficients;
 
@@ -51,44 +50,9 @@ struct crossover
 	 __device__
 	coefficients operator()(thrust::tuple<coefficients&, coefficients&>& temp, unsigned int seed)
 	{
-		curandState state;
-		curand_init(seed, 0, 0, &state);
-		coefficients parent1 = thrust::get<0>(temp);
-		coefficients parent2 = thrust::get<1>(temp);
-		coefficients child = parent2;
-		unsigned char n = static_cast<unsigned int>(curand_uniform(&state) * 10000) % 32 + 1;
-		unsigned int mask = 0xffffffff, cast = 0,value = 0;
-		mask >>= n;
-		memcpy(&cast, &thrust::get<0>(parent2), 4);
-		value = cast & mask;
-		memcpy(&cast, &thrust::get<0>(parent1), 4);
-		value |= cast & ~mask;
-		memcpy(&thrust::get<0>(child), &value, 4);
-		value = 0;
-		memcpy(&cast, &thrust::get<1>(parent2), 4);
-		value = cast & mask;
-		memcpy(&cast, &thrust::get<1>(parent1), 4);
-		value |= cast & ~mask;
-		memcpy(&thrust::get<1>(child), &value, 4);
-		value = 0;
-		memcpy(&cast, &thrust::get<2>(parent2), 4);
-		value = cast & mask;
-		memcpy(&cast, &thrust::get<2>(parent1), 4);
-		value |= cast & ~mask;
-		memcpy(&thrust::get<2>(child), &value, 4);
-		value = 0;
-		memcpy(&cast, &thrust::get<3>(parent2), 4);
-		value = cast & mask;
-		memcpy(&cast, &thrust::get<3>(parent1), 4);
-		value |= cast & ~mask;
-		memcpy(&thrust::get<3>(child), &value, 4);
-		value = 0;
-		memcpy(&cast, &thrust::get<4>(parent2), 4);
-		value = cast & mask;
-		memcpy(&cast, &thrust::get<4>(parent1), 4);
-		value |= cast & ~mask;
-		memcpy(&thrust::get<4>(child), &value, 4);
-		
+		coefficients child = thrust::get<1>(temp);
+		thrust::get<1>(child) = thrust::get<1>(thrust::get<0>(temp));
+		thrust::get<3>(child) = thrust::get<3>(thrust::get<0>(temp));
 		return child;
 	}
 };
@@ -176,59 +140,66 @@ int main()
 	}
 	
 	D_initial_dataset = H_initial_dataset;
-	
+
+	//fitness vars
+
 	thrust::device_vector<coefficients> D_population(population_size, (0,0,0,0,0));
 	thrust::device_vector<float> deviation(datapoints);
 	thrust::device_vector<float> fitness(datapoints);
 	thrust::device_vector<coefficients> parents(population_size / 2);
-	// fitness calculation
-	for (size_t i = 0; i < population_size; i++)
-	{
-		thrust::transform(thrust::make_zip_iterator(thrust::make_tuple(D_initial_dataset.begin(), step.begin())), thrust::make_zip_iterator(thrust::make_tuple(D_initial_dataset.end(), step.end())), thrust::make_constant_iterator(D_population[i]), deviation.begin(), fitnesselement());
-		fitness[i] = thrust::transform_reduce(deviation.begin(), deviation.end(), absolute_value<float>(), 0, thrust::maximum<float>());
-	} 
-	// selection
-	thrust::sort_by_key(fitness.begin(), fitness.end(),D_population.begin());
-	thrust::copy_n(thrust::device, D_population.begin(), population_size / 2, parents.begin());
-	//crossover generation
+
+	//crossover vars
+
 	thrust::device_vector<coefficients> shuffled_parents(population_size / 2);
 	thrust::device_vector<coefficients> children(population_size / 2);
 	thrust::default_random_engine g;
-	thrust::shuffle_copy(thrust::device, parents.begin(), parents.end(), shuffled_parents.begin(),g);
-	thrust::transform(thrust::make_zip_iterator(thrust::make_tuple(parents.begin(), shuffled_parents.begin())), thrust::make_zip_iterator(thrust::make_tuple(parents.end(), shuffled_parents.end())), thrust::counting_iterator<int>(0), children.begin(), crossover());
-	//mutation
-	thrust::device_vector<coefficients> new_population(population_size);
-	thrust::copy_n(thrust::device, parents.begin(), population_size / 2, new_population.begin());
-	thrust::copy_n(thrust::device, children.begin(), population_size / 2, new_population.begin() + population_size / 2);
+	unsigned int generations = 1;
+	std::cin >> generations;
 
-	thrust::transform(new_population.begin()+1, new_population.end(), thrust::counting_iterator<int>(0), new_population.begin()+1, mutation());
-	thrust::copy_n(thrust::device, parents.begin(), 1, new_population.begin());
-	//test
-	//thrust::device_vector<float> test(population_size, 1.0);
-	////thrust::sequence(thrust::device, test.begin(), test.end());
-	//thrust::host_vector<float> host_test(population_size);
-	//thrust::transform(test.begin(),test.end(), test.begin(), generate());
-	//host_test = test;
-	//for (size_t i = 0; i < 10; i++)
-	//{
-	//	std::cout << host_test[i] << '\n';
-	//}
-	
-	H_population = new_population;
+	for (size_t j = 0; j < generations; j++)
+	{
+		// fitness calculation
+
+		for (size_t i = 0; i < population_size; i++)
+		{
+			thrust::transform(thrust::make_zip_iterator(thrust::make_tuple(D_initial_dataset.begin(), step.begin())), thrust::make_zip_iterator(thrust::make_tuple(D_initial_dataset.end(), step.end())), thrust::make_constant_iterator(D_population[i]), deviation.begin(), fitnesselement());
+			fitness[i] = thrust::transform_reduce(deviation.begin(), deviation.end(), absolute_value<float>(), 0, thrust::maximum<float>());
+		}
+
+		// selection
+
+		thrust::sort_by_key(fitness.begin(), fitness.end(), D_population.begin());
+		thrust::copy_n(thrust::device, D_population.begin(), population_size / 2, parents.begin());
+
+		//crossover generation
+
+		thrust::shuffle_copy(thrust::device, parents.begin(), parents.end(), shuffled_parents.begin(), g);
+		thrust::transform(thrust::make_zip_iterator(thrust::make_tuple(parents.begin(), shuffled_parents.begin())), thrust::make_zip_iterator(thrust::make_tuple(parents.end(), shuffled_parents.end())), thrust::counting_iterator<int>(0), children.begin(), crossover());
+
+		//mutation
+
+		thrust::copy_n(thrust::device, parents.begin(), population_size / 2, D_population.begin());
+		thrust::copy_n(thrust::device, children.begin(), population_size / 2, D_population.begin() + population_size / 2);
+
+		thrust::transform(D_population.begin() + 1, D_population.end(), thrust::counting_iterator<int>(0), D_population.begin() + 1, mutation());
+		thrust::copy_n(thrust::device, parents.begin(), 1, D_population.begin());
+
+		//test
+		//thrust::device_vector<float> test(population_size, 1.0);
+		////thrust::sequence(thrust::device, test.begin(), test.end());
+		//thrust::host_vector<float> host_test(population_size);
+		//thrust::transform(test.begin(),test.end(), test.begin(), generate());
+		//host_test = test;
+		//for (size_t i = 0; i < 10; i++)
+		//{
+		//	std::cout << host_test[i] << '\n';
+		//}
+	}
+	H_population = D_population;
 	std::cout << thrust::get<0>(H_population[0]) << '\n';
 	std::cout << thrust::get<1>(H_population[0]) << '\n';
 	std::cout << thrust::get<2>(H_population[0]) << '\n';
 	std::cout << thrust::get<3>(H_population[0]) << '\n';
 	std::cout << thrust::get<4>(H_population[0]) << '\n';
-	std::cout << thrust::get<0>(H_population[1]) << '\n';
-	std::cout << thrust::get<1>(H_population[1]) << '\n';
-	std::cout << thrust::get<2>(H_population[1]) << '\n';
-	std::cout << thrust::get<3>(H_population[1]) << '\n';
-	std::cout << thrust::get<4>(H_population[1]) << '\n';
-	std::cout << thrust::get<0>(H_population[502]) << '\n';
-	std::cout << thrust::get<1>(H_population[502]) << '\n';
-	std::cout << thrust::get<2>(H_population[502]) << '\n';
-	std::cout << thrust::get<3>(H_population[502]) << '\n';
-	std::cout << thrust::get<4>(H_population[502]) << '\n';
-	
+		
 }
