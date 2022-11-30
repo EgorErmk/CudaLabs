@@ -23,7 +23,7 @@
 
 const unsigned int datapoints = 500, population_size = 1000;
 const float a = -4, b = 2; // "a" is the left point "b" is the right
-__constant__ float stddev = 1, mean = 0;
+__constant__ float stddev = 1, mean = 0.5;
 const float C0 = 2, C1 = 1, C2 = 1, C3 = -1, C4 = -0.5; // coefs 
 
 typedef thrust::tuple<float, float, float, float, float> coefficients;
@@ -214,7 +214,8 @@ int main()
 		{
 			thrust::transform(step.begin(), step.end(), thrust::make_constant_iterator(D_population[i]), deviation.begin(), fitnesselement());
 			thrust::transform(D_initial_dataset.begin(), D_initial_dataset.end(), deviation.begin(), deviation.begin(), thrust::plus<float>());
-			fitness[i] = thrust::transform_reduce(deviation.begin(), deviation.end(), absolute_value<float>(),0,thrust::maximum<float>());
+			thrust::transform(deviation.begin(), deviation.end(),deviation.begin(), absolute_value<float>());
+			fitness[i] = *thrust::max_element(deviation.begin(), deviation.end());
 		}
 		
 		// selection
