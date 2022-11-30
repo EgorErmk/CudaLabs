@@ -7,6 +7,10 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CudaMatMul", "CudaMatMul\Cu
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "VectorSum", "VectorSum\VectorSum.vcxproj", "{EBDD9D4D-7E9A-4BB1-96D8-3C2C029D9C14}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "GeneticAlgorithm", "GeneticAlgorithm\GeneticAlgorithm.vcxproj", "{B2A44DDC-82C5-4C65-A29A-0E8B6BCC4B36}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "test1", "test1\test1.vcxproj", "{DC6F8EC0-95FE-49B3-98F7-141BE6DAF08E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -21,6 +25,14 @@ Global
 		{EBDD9D4D-7E9A-4BB1-96D8-3C2C029D9C14}.Debug|x64.Build.0 = Debug|x64
 		{EBDD9D4D-7E9A-4BB1-96D8-3C2C029D9C14}.Release|x64.ActiveCfg = Release|x64
 		{EBDD9D4D-7E9A-4BB1-96D8-3C2C029D9C14}.Release|x64.Build.0 = Release|x64
+		{B2A44DDC-82C5-4C65-A29A-0E8B6BCC4B36}.Debug|x64.ActiveCfg = Debug|x64
+		{B2A44DDC-82C5-4C65-A29A-0E8B6BCC4B36}.Debug|x64.Build.0 = Debug|x64
+		{B2A44DDC-82C5-4C65-A29A-0E8B6BCC4B36}.Release|x64.ActiveCfg = Release|x64
+		{B2A44DDC-82C5-4C65-A29A-0E8B6BCC4B36}.Release|x64.Build.0 = Release|x64
+		{DC6F8EC0-95FE-49B3-98F7-141BE6DAF08E}.Debug|x64.ActiveCfg = Debug|x64
+		{DC6F8EC0-95FE-49B3-98F7-141BE6DAF08E}.Debug|x64.Build.0 = Debug|x64
+		{DC6F8EC0-95FE-49B3-98F7-141BE6DAF08E}.Release|x64.ActiveCfg = Release|x64
+		{DC6F8EC0-95FE-49B3-98F7-141BE6DAF08E}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
